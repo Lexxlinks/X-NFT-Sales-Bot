@@ -1,0 +1,34 @@
+{
+
+  "name": "nft-sales-bot",
+
+  "version": "1.0.0",
+
+  "description": "X bot posting Opensea sales for a given collection",
+
+  "main": "index.js",
+
+  "author": "Lexxlinks https://github.com/Lexxlinks",
+
+  "license": "ISC",
+
+  "dependencies": {
+
+    "@opensea/stream-js": "^0.1.2",
+
+    "axios": "^1.5.0",
+
+    "dotenv": "^16.3.1",
+
+    "ethers": "^6.7.1",
+
+    "lodash": "^4.17.21",
+
+    "moment": "^2.29.4",
+
+    "twit": "^2.2.11"
+
+  }
+
+}
+
