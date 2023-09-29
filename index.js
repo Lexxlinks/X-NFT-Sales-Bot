@@ -1,70 +1,70 @@
-const axios = require('axios');
 const _ = require('lodash');
-const moment = require('moment');
 const { ethers } = require('ethers');
 const tweet = require('./tweet');
-const cache = require('./cache');
+require('dotenv').config();
+const { OpenSeaStreamClient } = require('@opensea/stream-js');
+const WebSocket = require('ws');
+
+const X_API_KEY = process.env.X_API_KEY;
+// console.log(process.env) //debug
+
+// Initialize OpenSea Stream client
+const client = new OpenSeaStreamClient({
+  networkName: 'mainnet',
+  apiKey: X_API_KEY,
+  apiSecretKey: X_API_KEY,
+  eventTypes: ['created', 'successful'],
+  sharedSecret: 'YOUR_SHARED_SECRET',
+  connectOptions: {
+    transport: WebSocket,
+  },
+});
+
+// Start the WebSocket connection
+client.connect();
+
+// Handle connection errors
+client.on('error', (error) => {
+  console.error('OpenSea Stream error:', error);
+});
+
+// Subscribe to events
+client.on('event', (event) => {
+  console.log('Event received:', event);
+});
+
+// Subscribe to item sold events for your collection
+const collectionSlug = 'mgminft'; // Replace with your collection's slug
+const event = ['item_sold']; // Specify the event types you want to subscribe to
+
+client.onItemSold(collectionSlug, (event) => {
+  console.log('Item sold event received');
+  console.log(event);
+
+  // Handle the item sold event and post it
+  formatAndSendTweet(event);
+});
 
 // Format post text
 function formatAndSendTweet(event) {
-    // Handle both individual items + bundle sales
-    const assetName = _.get(event, ['asset', 'name'], _.get(event, ['asset_bundle', 'name']));
-    const openseaLink = _.get(event, ['asset', 'permalink'], _.get(event, ['asset_bundle', 'permalink']));
+  // Handle both individual items + bundle sales
+  const assetName = _.get(event, ['asset', 'name'], _.get(event, ['asset_bundle', 'name']));
+  const openseaLink = encodeURIComponent(_.get(event, ['asset', 'permalink'], _.get(event, ['asset_bundle', 'permalink'])));
 
-    const totalPrice = _.get(event, 'total_price');
+  const totalPrice = _.get(event, 'total_price');
 
-    const tokenDecimals = _.get(event, ['payment_token', 'decimals']);
-    const tokenUsdPrice = _.get(event, ['payment_token', 'usd_price']);
-    const tokenEthPrice = _.get(event, ['payment_token', 'eth_price']);
+  const tokenDecimals = _.get(event, ['payment_token', 'decimals']);
+  const tokenUsdPrice = _.get(event, ['payment_token', 'usd_price']);
+  const tokenEthPrice = _.get(event, ['payment_token', 'eth_price']);
 
-    const formattedUnits = ethers.utils.formatUnits(totalPrice, tokenDecimals);
-    const formattedEthPrice = formattedUnits * tokenEthPrice;
-    const formattedUsdPrice = formattedUnits * tokenUsdPrice;
+  const formattedUnits = ethers.utils.formatUnits(totalPrice, tokenDecimals);
+  const formattedEthPrice = Number(formattedUnits) * tokenEthPrice;
+  const formattedUsdPrice = Number(formattedUnits) * tokenUsdPrice;
 
-    const tweetText = `${assetName} bought for ${formattedEthPrice}${ethers.constants.EtherSymbol} ($${Number(formattedUsdPrice).toFixed(2)}) #NFT ${openseaLink}`;
+  const tweetText = `${assetName} bought for ${formattedEthPrice}${ethers.constants.EtherSymbol} ($${formattedUsdPrice.toFixed(2)}) #NFT ${openseaLink}`;
 
-    console.log(tweetText);
+  console.log(tweetText);
 
-    const imageUrl = _.get(event, ['asset', 'image_url']);
-    return tweet.tweetWithImage(tweetText, imageUrl);
-
+  const imageUrl = _.get(event, ['asset', 'image_url']);
+  return tweet.tweetWithImage(tweetText, imageUrl);
 }
-
-// Poll OpenSea every 60 seconds & retrieve all sales for a given collection in either the time since the last sale OR in the last minute
-setInterval(() => {
-    const lastSaleTime = cache.get('lastSaleTime', null) || moment().startOf('minute').subtract(59, "seconds").unix();
-
-    console.log(`Last sale (in seconds since Unix epoch): ${cache.get('lastSaleTime', null)}`);
-
-    axios.get('https://api.opensea.io/v2/collection/{mgminft}/nfts', {
-        headers: {
-            'X-API-KEY': process.env.X_API_KEY
-        },
-        params: {
-            collection_slug: process.env.OPENSEA_COLLECTION_SLUG,
-            event_type: 'successful',
-            occurred_after: lastSaleTime,
-            only_opensea: 'false'
-        }
-    }).then((response) => {
-        const events = _.get(response, ['data', 'asset_events']);
-
-        const sortedEvents = _.sortBy(events, function(event) {
-            const created = _.get(event, 'created_date');
-
-            return new Date(created);
-        })
-
-        console.log(`${events.length} sales since the last one...`);
-
-        _.each(sortedEvents, (event) => {
-            const created = _.get(event, 'created_date');
-
-            cache.set('lastSaleTime', moment(created).unix());
-
-            return formatAndSendTweet(event);
-        });
-    }).catch((error) => {
-        console.error(error);
-    });
-}, 60000);

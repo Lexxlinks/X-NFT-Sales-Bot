@@ -1,5 +1,6 @@
 const axios = require('axios');
 const twit = require('twit');
+require('dotenv').config();
 
 const twitterConfig = {
     consumer_key: process.env.API_KEY,
@@ -18,7 +19,7 @@ async function tweet(tweetText) {
 
     twitterClient.post('statuses/update', tweet, (error, tweet, response) => {
         if (!error) {
-            console.log(`Successfully tweeted: ${tweetText}`);
+            console.log(`Successfully tweeted: ${tweetText}`, response);
         } else {
             console.error(error);
         }
